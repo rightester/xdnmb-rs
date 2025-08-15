@@ -22,17 +22,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     // let forum_list = client.get_forum_list().await.unwrap();
     // println!("获取版块：{forum_list:?}");
     // println!("forum at index 0 's msg: {}", forum_list[0].forums[0].msg);
-    let forum_content = client.get_threads_from_forum(17, 0).await?;
-    let thread= &forum_content[0];
-    println!("No.{}  {} ID: {}\n{}", thread.rid, thread.now, thread.user_hash, thread.content);
-    // let thread = client.get_thread(thread.rid, None, true).await?;
-    for reply in thread.replies.iter() {
-        println!("{}", reply.content);
-    }
-    print!("\n\n\n\n\n");
-    for reply in client.get_thread_page(thread.rid.as_str(), 1, false).await?.replies.iter() {
-        println!("{}", reply.content);
-    }
+    // let forum_content = client.get_threads_from_forum(17, 0).await?;
+    // let thread= &forum_content[0];
+    // println!("No.{}  {} ID: {}\n{}", thread.rid, thread.now, thread.user_hash, thread.content);
+    // for reply in thread.replies.iter() {
+    //     println!("{}", reply.content);
+    // }
+    // print!("\n\n\n\n\n");
+    // for reply in client.get_thread_page(&thread.rid.to_string(), 1, false).await?.replies.iter() {
+    //     println!("{}", reply.content);
+    // }
     for thread in client.get_threads_from_feed(1).await?.iter() {
         println!("{thread:?}\n----------\n");
     }

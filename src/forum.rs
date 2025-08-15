@@ -1,4 +1,88 @@
-use serde::{Deserialize, Serialize};
+use std::ops::Deref;
+
+use serde::{ Serialize };
+use serde::{ Deserialize, Deserializer };
+use serde_json::Value;
+use serde::de::DeserializeOwned;
+
+
+
+
+
+
+
+
+
+// 通用的灵活数字反序列化器
+#[derive(Serialize, Debug, Clone, Copy)]
+pub struct Num(i64);
+impl Num {
+    pub fn into_inner(self) -> i64 {
+        self.0
+    }
+}
+impl std::fmt::Display for Num {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl Deref for Num {
+    type Target = i64;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<'de> Deserialize<'de> for Num {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        let number = match value {
+            Value::Number(n) => {
+                n.as_i64().ok_or_else(|| {
+                    serde::de::Error::custom("invalid number format")
+                })?
+            }
+            Value::String(s) => {
+                match s.as_str() {
+                    "" => 0,
+                    _ => s.parse::<i64>().map_err(serde::de::Error::custom)?,
+                }
+            }
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "expected number or string"
+                ));
+            }
+        };
+        Ok(Num(number))
+    }
+}
+
+// 通用的 JSON 字符串反序列化函数
+fn deserialize_json_string<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: DeserializeOwned,
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    match value {
+        Value::String(s) => {
+            // 尝试将字符串解析为指定类型
+            match s.as_str() {
+                "" => Ok(None),
+                _ => serde_json::from_str(&s).map_err(serde::de::Error::custom),
+            }
+        }
+        _ => {
+            // 如果不是字符串，直接尝试转换为目标类型
+            serde_json::from_value(value).map_err(serde::de::Error::custom)
+        }
+    }
+}
+
+
 
 
 
@@ -7,8 +91,8 @@ use serde::{Deserialize, Serialize};
 pub type ForumList = Vec<ForumGroup>;
 
 
-type NUM = String;
-type BOOL = String;
+type NUM = Num;
+type BOOL = Num;
 type TIME = String;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -66,11 +150,11 @@ pub type ThreadList = Vec<Thread>;
 
 
 #[allow(unused)]
-pub type TimelineList = Vec<Timeline>;
+pub type TimelineList = Vec<TimelineForum>;
 
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct Timeline {
+pub struct TimelineForum {
 
     #[serde(rename="id")]
     tid: NUM,
@@ -85,7 +169,6 @@ pub struct Timeline {
 }
 
 
-
 /// 代表论坛中的一个主题串（主贴）及其回复。
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Thread {
@@ -95,7 +178,7 @@ pub struct Thread {
     /// 主题串所属的版块ID。
     pub fid: NUM,
     /// 该主题串的直接回复数量（不包括嵌套回复）。
-    #[serde(rename = "ReplyCount")]
+    #[serde(alias = "ReplyCount")]
     pub reply_count: NUM,
     /// 附加图片的文件名（不包含扩展名和路径）。
     pub img: String, // 可能为空字符串 ""
@@ -112,18 +195,26 @@ pub struct Thread {
     /// 帖子正文内容，可能包含HTML。
     pub content: String,
     /// 是否启用Sage功能（回复时不顶帖）。
-    pub sage: BOOL, // 0 或 1 (在JSON中为数字)
+    pub sage: Option<BOOL>, // 0 或 1 (在JSON中为数字)
     /// 是否为管理员/版主发布的帖子。
     pub admin: BOOL, // 0 或 1 (在JSON中为数字)
     /// 帖子是否被隐藏。
-    #[serde(rename = "Hide")]
+    #[serde(alias = "Hide")]
     pub hide: BOOL, // 0 或 1 (在JSON中为数字)
     /// 该主题串下的回复列表（嵌套结构）。
     #[serde(rename = "Replies")]
-    pub replies: Vec<Reply>,
+    pub replies: Option<Vec<Reply>>,
     /// 网页版除去显示的最近几条回复后剩余的回复数量 “回应有……篇被省略。要阅读所有回应请按下回应链接。”
     #[serde(rename = "RemainReplies")]
     pub remain_replies: Option<NUM>, // 有此字段则表示当前Thread对象的回复数量是brief的，不是完整的
+    #[serde(deserialize_with = "deserialize_json_string")]
+    pub recent_replies: Option<Vec<NUM>>,
+    // pub po: Option<String>,
+    // pub user_id: Option<NUM>,
+    // pub file_id: Option<NUM>,
+    // pub category: Option<String>,
+    pub email: Option<NUM>,
+
 }
 
 /// 代表一条回复（跟帖）。
