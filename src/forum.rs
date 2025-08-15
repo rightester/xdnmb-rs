@@ -17,8 +17,8 @@ use serde::de::DeserializeOwned;
 pub type ForumList = Vec<ForumGroup>;
 
 
-type NUM = NumString;
-type BOOL = BoolNum;
+type NUM = SNum;
+type BOOL = SNBool;
 type TIME = String;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -184,26 +184,49 @@ pub struct Reply {
 
 
 
+// 对于JSON的值本应是一个JSON对象但却是一个字符串，需要额外处理时所用的解析函数
+fn deserialize_json_string<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: DeserializeOwned,
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    match value {
+        Value::String(s) => {
+            // 尝试将字符串解析为指定类型
+            match s.as_str() {
+                "" => Ok(None),
+                _ => serde_json::from_str(&s).map_err(serde::de::Error::custom),
+            }
+        }
+        _ => {
+            // 如果不是字符串，直接尝试转换为目标类型
+            serde_json::from_value(value).map_err(serde::de::Error::custom)
+        }
+    }
+}
+
+
 
 #[derive(Serialize, Debug, Clone, Copy)]
-pub struct NumString(i64);
-impl NumString {
+pub struct SNum(i64);
+impl SNum {
     pub fn into_inner(self) -> i64 {
         self.0
     }
 }
-impl Display for NumString {
+impl Display for SNum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
-impl Deref for NumString {
+impl Deref for SNum {
     type Target = i64;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
-impl<'de> Deserialize<'de> for NumString {
+impl<'de> Deserialize<'de> for SNum {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -227,45 +250,23 @@ impl<'de> Deserialize<'de> for NumString {
                 ));
             }
         };
-        Ok(NumString(number))
-    }
-}
-
-// 通用的 JSON 字符串反序列化函数
-fn deserialize_json_string<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    T: DeserializeOwned,
-    D: Deserializer<'de>,
-{
-    let value = Value::deserialize(deserializer)?;
-    match value {
-        Value::String(s) => {
-            // 尝试将字符串解析为指定类型
-            match s.as_str() {
-                "" => Ok(None),
-                _ => serde_json::from_str(&s).map_err(serde::de::Error::custom),
-            }
-        }
-        _ => {
-            // 如果不是字符串，直接尝试转换为目标类型
-            serde_json::from_value(value).map_err(serde::de::Error::custom)
-        }
+        Ok(SNum(number))
     }
 }
 
 #[derive(Serialize, Debug, Clone, Copy)]
-pub struct BoolNum(bool);
-impl BoolNum {
+pub struct SNBool(bool);
+impl SNBool {
     pub fn into_inner(self) -> bool {
         self.0
     }
 }
-impl Display for BoolNum {
+impl Display for SNBool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
-impl<'de> Deserialize<'de> for BoolNum {
+impl<'de> Deserialize<'de> for SNBool {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -273,7 +274,7 @@ impl<'de> Deserialize<'de> for BoolNum {
         let value = Value::deserialize(deserializer)?;
         let boolnum = match value {
             Value::Bool(b) => {
-                return Ok(BoolNum(b));
+                return Ok(SNBool(b));
             }
             Value::String(s) => {
                 match s.as_str() {
@@ -296,7 +297,7 @@ impl<'de> Deserialize<'de> for BoolNum {
                 ));
             }
         };
-        Ok(BoolNum(bool))
+        Ok(SNBool(bool))
     }
 }
 
