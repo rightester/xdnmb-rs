@@ -180,47 +180,8 @@ impl ApiClient {
         Ok(reply)
     }
 
-    // 查看订阅，uuid为订阅id，page为页数（可置空）
-    pub async fn get_threads_from_feed<NUM>(&self, page: NUM) -> Result<ThreadList, Box<dyn Error>>
-        where NUM: Display
-    {
-        let api_path = "api/feed";
-        let feed_uuid = self.feed_uuid.as_ref().unwrap();
-        let page = page.to_string();
-        let params: [(&'static str, &str); 2] = [("uuid", feed_uuid.as_str()), ("page", page.as_str())];
-        let json = self.get(api_path, Some(params.into())).await?;
-        let thread_list = serde_json::from_value::<ThreadList>(json)?;
-        Ok(thread_list)
-    }
-
-    // 添加订阅，uuid为订阅id，rid为串号
-    pub async fn add_feed(
-        &self,
-        uuid: &str,
-        rid: &str,
-    ) -> Result<json::Value, Box<dyn Error>> {
-        let url = format!("{}/api/addFeed?uuid={}", self.base_url, uuid);
-        let params = [("rid", rid)];
-        let res = self.client.post(&url).form(&params).send().await?;
-        let json: json::Value = res.json().await?;
-        Ok(json)
-    }
-
-    // 删除订阅，uuid为订阅id，rid为串号
-    pub async fn del_feed(
-        &self,
-        uuid: &str,
-        rid: &str,
-    ) -> Result<json::Value, Box<dyn Error>> {
-        let url = format!("{}/api/delFeed?uuid={}", self.base_url, uuid);
-        let params = [("rid", rid)];
-        let res = self.client.post(&url).form(&params).send().await?;
-        let json: json::Value = res.json().await?;
-        Ok(json)
-    }
-
     // 发新串
-    pub async fn do_post_thread(
+    pub async fn post_new_thread(
         &self,
         imageurl: Option<&str>,
         fid: &str,
@@ -266,20 +227,20 @@ impl ApiClient {
         Ok(text)
     }
 
-    // 回复串
-    pub async fn do_reply_thread(
+    // 发评论
+    pub async fn post_thread_reply(
         &self,
-        imageurl: Option<&str>,
-        id: &str,
+        name: &str,
         title: Option<&str>,
-        content: Option<&str>,
-        water: Option<&str>,
         usercookie: Option<&str>,
+        content: Option<&str>,
+        img_url: Option<&str>,
+        img_watermark: Option<&str>,
     ) -> Result<String, Box<dyn Error>> {
         let url = "https://www.nmbxd1.com/Home/Forum/doReplyThread.html";
 
         let mut form = multipart::Form::new()
-            .text("resto", id.to_string());
+            .text("resto", name.to_string());
 
         if let Some(t) = title {
             form = form.text("title", t.to_string());
@@ -287,11 +248,11 @@ impl ApiClient {
         if let Some(c) = content {
             form = form.text("content", c.to_string());
         }
-        if let Some(w) = water {
+        if let Some(w) = img_watermark {
             form = form.text("water", w.to_string());
         }
 
-        if let Some(img_path) = imageurl {
+        if let Some(img_path) = img_url {
             let file_content = tokio::fs::read(img_path).await?;
             let file_name = std::path::Path::new(img_path)
                 .file_name()
@@ -311,6 +272,45 @@ impl ApiClient {
         let res = request.send().await?;
         let text = res.text().await?;
         Ok(text)
+    }
+
+    // 查看订阅，uuid为订阅id，page为页数（可置空）
+    pub async fn get_threads_from_feed<NUM>(&self, page: NUM) -> Result<ThreadList, Box<dyn Error>>
+        where NUM: Display
+    {
+        let api_path = "api/feed";
+        let feed_uuid = self.feed_uuid.as_ref().unwrap();
+        let page = page.to_string();
+        let params: [(&'static str, &str); 2] = [("uuid", feed_uuid.as_str()), ("page", page.as_str())];
+        let json = self.get(api_path, Some(params.into())).await?;
+        let thread_list = serde_json::from_value::<ThreadList>(json)?;
+        Ok(thread_list)
+    }
+
+    // 添加订阅，uuid为订阅id，rid为串号
+    pub async fn add_feed(
+        &self,
+        uuid: &str,
+        rid: &str,
+    ) -> Result<json::Value, Box<dyn Error>> {
+        let url = format!("{}/api/addFeed?uuid={}", self.base_url, uuid);
+        let params = [("rid", rid)];
+        let res = self.client.post(&url).form(&params).send().await?;
+        let json: json::Value = res.json().await?;
+        Ok(json)
+    }
+
+    // 删除订阅，uuid为订阅id，rid为串号
+    pub async fn del_feed(
+        &self,
+        uuid: &str,
+        rid: &str,
+    ) -> Result<json::Value, Box<dyn Error>> {
+        let url = format!("{}/api/delFeed?uuid={}", self.base_url, uuid);
+        let params = [("rid", rid)];
+        let res = self.client.post(&url).form(&params).send().await?;
+        let json: json::Value = res.json().await?;
+        Ok(json)
     }
 
 }

@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use std::fmt::Display;
 
 use serde::{ Serialize };
 use serde::{ Deserialize, Deserializer };
@@ -11,88 +12,13 @@ use serde::de::DeserializeOwned;
 
 
 
-
-
-// 通用的灵活数字反序列化器
-#[derive(Serialize, Debug, Clone, Copy)]
-pub struct Num(i64);
-impl Num {
-    pub fn into_inner(self) -> i64 {
-        self.0
-    }
-}
-impl std::fmt::Display for Num {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
-impl Deref for Num {
-    type Target = i64;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl<'de> Deserialize<'de> for Num {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = Value::deserialize(deserializer)?;
-        let number = match value {
-            Value::Number(n) => {
-                n.as_i64().ok_or_else(|| {
-                    serde::de::Error::custom("invalid number format")
-                })?
-            }
-            Value::String(s) => {
-                match s.as_str() {
-                    "" => 0,
-                    _ => s.parse::<i64>().map_err(serde::de::Error::custom)?,
-                }
-            }
-            _ => {
-                return Err(serde::de::Error::custom(
-                    "expected number or string"
-                ));
-            }
-        };
-        Ok(Num(number))
-    }
-}
-
-// 通用的 JSON 字符串反序列化函数
-fn deserialize_json_string<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    T: DeserializeOwned,
-    D: Deserializer<'de>,
-{
-    let value = Value::deserialize(deserializer)?;
-    match value {
-        Value::String(s) => {
-            // 尝试将字符串解析为指定类型
-            match s.as_str() {
-                "" => Ok(None),
-                _ => serde_json::from_str(&s).map_err(serde::de::Error::custom),
-            }
-        }
-        _ => {
-            // 如果不是字符串，直接尝试转换为目标类型
-            serde_json::from_value(value).map_err(serde::de::Error::custom)
-        }
-    }
-}
-
-
-
-
-
 // 类型别名，代表论坛组的列表
 #[allow(unused)]
 pub type ForumList = Vec<ForumGroup>;
 
 
-type NUM = Num;
-type BOOL = Num;
+type NUM = NumString;
+type BOOL = BoolNum;
 type TIME = String;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -177,30 +103,30 @@ pub struct Thread {
     pub rid: NUM,
     /// 主题串所属的版块ID。
     pub fid: NUM,
+    /// Po的饼干
+    pub user_hash: String,
+    /// 帖子正文，含HTML
+    pub content: String,
     /// 该主题串的直接回复数量（不包括嵌套回复）。
     #[serde(alias = "ReplyCount")]
     pub reply_count: NUM,
-    /// 附加图片的文件名（不包含扩展名和路径）。
+    /// 附图文件路径名
     pub img: String, // 可能为空字符串 ""
-    /// 附加图片的扩展名（例如 ".png", ".jpg"）。
+    /// 附图扩展名
     pub ext: String, // 可能为空字符串 ""
     /// 发布时间的格式化字符串。
     pub now: TIME, // 格式： "2025-07-31(四)13:49:32"
-    /// Po的饼干
-    pub user_hash: String,
-    /// 用户自定义的昵称。
+    /// 帖子作者笔名
     pub name: String, // 示例: "无名氏"
-    /// 帖子标题。
+    /// 帖子标题
     pub title: String, // 示例: "无标题"
-    /// 帖子正文内容，可能包含HTML。
-    pub content: String,
-    /// 是否启用Sage功能（回复时不顶帖）。
-    pub sage: Option<BOOL>, // 0 或 1 (在JSON中为数字)
-    /// 是否为管理员/版主发布的帖子。
-    pub admin: BOOL, // 0 或 1 (在JSON中为数字)
-    /// 帖子是否被隐藏。
+    /// 是否被Sage
+    pub sage: Option<BOOL>, 
+    /// 是否为管理员帖
+    pub admin: BOOL, 
+    /// 是否被隐藏
     #[serde(alias = "Hide")]
-    pub hide: BOOL, // 0 或 1 (在JSON中为数字)
+    pub hide: BOOL, 
     /// 该主题串下的回复列表（嵌套结构）。
     #[serde(rename = "Replies")]
     pub replies: Option<Vec<Reply>>,
@@ -208,12 +134,12 @@ pub struct Thread {
     #[serde(rename = "RemainReplies")]
     pub remain_replies: Option<NUM>, // 有此字段则表示当前Thread对象的回复数量是brief的，不是完整的
     #[serde(deserialize_with = "deserialize_json_string")]
-    pub recent_replies: Option<Vec<NUM>>,
+    pub recent_replies: Option<Vec<NUM>>, // 有此字段则表示该帖子来源为订阅列表
     // pub po: Option<String>,
     // pub user_id: Option<NUM>,
     // pub file_id: Option<NUM>,
     // pub category: Option<String>,
-    pub email: Option<NUM>,
+    pub email: Option<String>,
 
 }
 
@@ -250,3 +176,127 @@ pub struct Reply {
     #[serde(rename = "Hide")]
     pub hide: Option<BOOL>, // 0 或 1 (在JSON中为数字)
 }
+
+
+
+
+
+
+
+
+
+#[derive(Serialize, Debug, Clone, Copy)]
+pub struct NumString(i64);
+impl NumString {
+    pub fn into_inner(self) -> i64 {
+        self.0
+    }
+}
+impl Display for NumString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl Deref for NumString {
+    type Target = i64;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl<'de> Deserialize<'de> for NumString {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        let number = match value {
+            Value::Number(n) => {
+                n.as_i64().ok_or_else(|| {
+                    serde::de::Error::custom("invalid number format")
+                })?
+            }
+            Value::String(s) => {
+                match s.as_str() {
+                    "" => 0,
+                    _ => s.parse::<i64>().map_err(serde::de::Error::custom)?,
+                }
+            }
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "expected number or string"
+                ));
+            }
+        };
+        Ok(NumString(number))
+    }
+}
+
+// 通用的 JSON 字符串反序列化函数
+fn deserialize_json_string<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: DeserializeOwned,
+    D: Deserializer<'de>,
+{
+    let value = Value::deserialize(deserializer)?;
+    match value {
+        Value::String(s) => {
+            // 尝试将字符串解析为指定类型
+            match s.as_str() {
+                "" => Ok(None),
+                _ => serde_json::from_str(&s).map_err(serde::de::Error::custom),
+            }
+        }
+        _ => {
+            // 如果不是字符串，直接尝试转换为目标类型
+            serde_json::from_value(value).map_err(serde::de::Error::custom)
+        }
+    }
+}
+
+#[derive(Serialize, Debug, Clone, Copy)]
+pub struct BoolNum(bool);
+impl BoolNum {
+    pub fn into_inner(self) -> bool {
+        self.0
+    }
+}
+impl Display for BoolNum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+impl<'de> Deserialize<'de> for BoolNum {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        let boolnum = match value {
+            Value::Bool(b) => {
+                return Ok(BoolNum(b));
+            }
+            Value::String(s) => {
+                match s.as_str() {
+                    "" => 0,
+                    _ => s.parse::<i64>().map_err(serde::de::Error::custom)?,
+                }
+            }
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "expected number or string"
+                ));
+            }
+        };
+        let bool = match boolnum {
+            0 => false,
+            1 => true,
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "expected bool or string"
+                ));
+            }
+        };
+        Ok(BoolNum(bool))
+    }
+}
+
