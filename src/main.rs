@@ -32,8 +32,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     // for reply in client.get_thread_page(&thread.rid.to_string(), 1, false).await?.replies.iter() {
     //     println!("{}", reply.content);
     // }
-    for thread in client.get_threads_from_feed(1).await?.iter() {
-        println!("{thread:?}\n----------\n");
+    // for thread in client.get_threads_from_feed(1).await?.iter() {
+    //     println!("{thread:?}\n----------\n");
+    // }
+    let thread = client.get_thread_page(66628266, 3, false).await?;
+    for reply in thread.replies.unwrap().iter() {
+        println!("{reply:?}");
     }
 
     // println!("{thread:?}");

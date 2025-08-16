@@ -98,84 +98,97 @@ pub struct TimelineForum {
 /// 代表论坛中的一个主题串（主贴）及其回复。
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Thread {
-    /// 主题串的唯一ID。
+
+
+    /// 主串的串号。
     #[serde(rename = "id")]
     pub rid: NUM,
-    /// 主题串所属的版块ID。
-    pub fid: NUM,
     /// Po的饼干
     pub user_hash: String,
+    /// 发布时间的格式化字符串。
+    pub now: TIME, // 格式： "2025-07-31(四)13:49:32"，可能没有中间的星期和括号而是一个空格
+
+    /// 主串所属的版块ID。
+    pub fid: Option<NUM>,
+    /// 该主题串的回复数量
+    #[serde(alias = "ReplyCount")]
+    pub reply_count: Option<NUM>,
+
+    /// 帖子标题
+    pub title: Option<String>,
+    /// 作者笔名
+    pub name: Option<String>,
+    /// 留个邮箱
+    pub email: Option<String>,
+
     /// 帖子正文，含HTML
     pub content: String,
-    /// 该主题串的直接回复数量（不包括嵌套回复）。
-    #[serde(alias = "ReplyCount")]
-    pub reply_count: NUM,
-    /// 附图文件路径名
-    pub img: String, // 可能为空字符串 ""
-    /// 附图扩展名
-    pub ext: String, // 可能为空字符串 ""
-    /// 发布时间的格式化字符串。
-    pub now: TIME, // 格式： "2025-07-31(四)13:49:32"
-    /// 帖子作者笔名
-    pub name: String, // 示例: "无名氏"
-    /// 帖子标题
-    pub title: String, // 示例: "无标题"
+    /// 附图文件在服务器上的路径名
+    pub img: String,
+    /// 附图文件类型扩展名
+    pub ext: String,
+
+    /// 主串的一页回复列表
+    #[serde(rename = "Replies")]
+    pub replies: Option<Vec<ThreadReply>>,
+
     /// 是否被Sage
-    pub sage: Option<BOOL>, 
+    pub sage: Option<BOOL>,
     /// 是否为管理员帖
-    pub admin: BOOL, 
+    pub admin: Option<BOOL>,
     /// 是否被隐藏
     #[serde(alias = "Hide")]
-    pub hide: BOOL, 
-    /// 该主题串下的回复列表（嵌套结构）。
-    #[serde(rename = "Replies")]
-    pub replies: Option<Vec<Reply>>,
+    pub hide: Option<BOOL>,
+
     /// 网页版除去显示的最近几条回复后剩余的回复数量 “回应有……篇被省略。要阅读所有回应请按下回应链接。”
     #[serde(rename = "RemainReplies")]
     pub remain_replies: Option<NUM>, // 有此字段则表示当前Thread对象的回复数量是brief的，不是完整的
-    #[serde(deserialize_with = "deserialize_json_string")]
+
+    /// 最近回复的回复楼串号
+    #[serde(default, deserialize_with = "deserialize_json_string")]
     pub recent_replies: Option<Vec<NUM>>, // 有此字段则表示该帖子来源为订阅列表
+
     // pub po: Option<String>,
     // pub user_id: Option<NUM>,
     // pub file_id: Option<NUM>,
     // pub category: Option<String>,
-    pub email: Option<String>,
 
 }
+
+pub type ThreadReply = Thread;
+
+
+
 
 /// 代表一条回复（跟帖）。
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Reply {
-    /// 回复的唯一串号。
-    #[serde(rename = "id")]
-    pub rid: NUM,
-    /// 该回复是串头，有所属的版块ID。
-    pub fid: Option<NUM>,
-    /// 不知道是干啥的
-    #[serde(rename = "ReplyCount")]
-    pub reply_count: Option<NUM>,
-    /// 附加图片的文件名（不包含扩展名和路径）。
-    pub img: String, // 可能为空字符串 ""
-    /// 附加图片的扩展名（例如 ".png", ".jpg"）。
-    pub ext: String, // 可能为空字符串 ""
-    /// 发布时间的格式化字符串。
-    pub now: TIME, // 例如: "2025-07-31(四)13:49:32"
-    /// 回复的饼干
-    pub user_hash: String,
-    /// 通常是“无名氏”的不知道啥的名称
-    pub name: String,
-    /// 回复标题。
-    pub title: String, // 示例: "无标题"
-    /// 回复正文内容，可能包含HTML。
-    pub content: String,
-    /// 是否启用Sage功能（回复时不顶帖）。
-    pub sage: Option<BOOL>, // 0 或 1 (在JSON中为数字)
-    /// 是否为管理员/版主发布的回复。
-    pub admin: BOOL, // 0 或 1 (在JSON中为数字)
-    /// 回复是否被隐藏。
-    #[serde(rename = "Hide")]
-    pub hide: Option<BOOL>, // 0 或 1 (在JSON中为数字)
-}
+
+// #[derive(Serialize, Deserialize, Debug, Clone)]
+// pub struct ThreadReply {
+
+//     /// 回复的唯一串号。
+//     #[serde(rename = "id")]
+//     pub rid: NUM,
+//     pub user_hash: String,
+//     pub now: TIME,
+
+//     /// 回复的主串所属版块ID。
+//     pub fid: Option<NUM>,
+//     #[serde(rename = "ReplyCount")]
+//     pub reply_count: Option<NUM>,
+
+//     pub title: String,
+//     pub name: String,
+//     pub email: Option<String>,
+
+//     pub content: String,
+//     pub img: String,
+//     pub ext: String,
+
+//     pub sage: Option<BOOL>,
+//     pub admin: BOOL,
+//     #[serde(rename = "Hide")]
+//     pub hide: Option<BOOL>,
+// }
 
 
 
@@ -191,6 +204,7 @@ where
     D: Deserializer<'de>,
 {
     let value = Value::deserialize(deserializer)?;
+    // println!("{value:?}");
     match value {
         Value::String(s) => {
             // 尝试将字符串解析为指定类型
@@ -198,6 +212,9 @@ where
                 "" => Ok(None),
                 _ => serde_json::from_str(&s).map_err(serde::de::Error::custom),
             }
+        }
+        Value::Null => {
+            Ok(None)
         }
         _ => {
             // 如果不是字符串，直接尝试转换为目标类型
@@ -232,6 +249,7 @@ impl<'de> Deserialize<'de> for SNum {
         D: Deserializer<'de>,
     {
         let value = Value::deserialize(deserializer)?;
+        // println!("{value:?}");
         let number = match value {
             Value::Number(n) => {
                 n.as_i64().ok_or_else(|| {
@@ -272,8 +290,21 @@ impl<'de> Deserialize<'de> for SNBool {
         D: Deserializer<'de>,
     {
         let value = Value::deserialize(deserializer)?;
+        // println!("{value:?}");
         let boolnum = match value {
             Value::Bool(b) => {
+                return Ok(SNBool(b));
+            }
+            Value::Number(num) => {
+                let b = match num.as_i64().unwrap_or(-1) {
+                    0 => false,
+                    1 => true,
+                    _ => { 
+                        return Err(serde::de::Error::custom(
+                            "number out of the bool convertion range"
+                        ));
+                    }
+                };
                 return Ok(SNBool(b));
             }
             Value::String(s) => {
@@ -284,7 +315,7 @@ impl<'de> Deserialize<'de> for SNBool {
             }
             _ => {
                 return Err(serde::de::Error::custom(
-                    "expected number or string"
+                    "expected bool or number or string"
                 ));
             }
         };

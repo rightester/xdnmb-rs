@@ -4,7 +4,7 @@ use tokio;
 use std::{collections::HashMap, error::Error, fmt::Display};
 
 
-pub mod forum; use forum::{ ForumList, ThreadList, TimelineList, Reply};
+pub mod forum; use forum::{ ForumList, ThreadList, TimelineList, ThreadReply};
 pub mod cdnpath; use cdnpath::CdnPathList;
 pub mod cookie; use cookie::UserCookie;
 
@@ -169,14 +169,14 @@ impl ApiClient {
         Ok(thread)
     }
 
-    pub async fn get_reply<RID>(&self, rid: RID) -> Result<Reply, Box<dyn Error>>
+    pub async fn get_reply<RID>(&self, rid: RID) -> Result<ThreadReply, Box<dyn Error>>
         where RID: Display
     {
         let api_path = "api/ref";
         let rid = rid.to_string();
         let params: [(&'static str, &str); 1] = [("id", rid.as_str())];
         let json = self.get(api_path, Some(params.into())).await?;
-        let reply = serde_json::from_value::<Reply>(json)?;
+        let reply = serde_json::from_value::<ThreadReply>(json)?;
         Ok(reply)
     }
 
