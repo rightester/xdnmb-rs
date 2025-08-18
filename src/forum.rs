@@ -24,9 +24,9 @@ type TIME = String;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ForumGroup {
     pub forums: Vec<Forum>,
-    pub id: String,
+    pub id: NUM,
     pub name: String,
-    pub sort: String, // 注意：JSON中是字符串数字
+    pub sort: NUM,
     pub status: String,
 }
 
@@ -102,7 +102,7 @@ pub struct Thread {
 
     /// 主串的串号。
     #[serde(rename = "id")]
-    pub rid: NUM,
+    pub tid: NUM,
     /// Po的饼干
     pub user_hash: String,
     /// 发布时间的格式化字符串。
@@ -132,11 +132,11 @@ pub struct Thread {
     #[serde(rename = "Replies")]
     pub replies: Option<Vec<ThreadReply>>,
 
-    /// 是否被Sage
+    /// 是否应被Sage
     pub sage: Option<BOOL>,
-    /// 是否为管理员帖
+    /// 是否为特权帖
     pub admin: Option<BOOL>,
-    /// 是否被隐藏
+    /// 是否应被隐藏
     #[serde(alias = "Hide")]
     pub hide: Option<BOOL>,
 
@@ -145,7 +145,7 @@ pub struct Thread {
     pub remain_replies: Option<NUM>, // 有此字段则表示当前Thread对象的回复数量是brief的，不是完整的
 
     /// 最近回复的回复楼串号
-    #[serde(default, deserialize_with = "deserialize_json_string")]
+    #[serde(default, deserialize_with = "deserialize_string_wrapped_json")]
     pub recent_replies: Option<Vec<NUM>>, // 有此字段则表示该帖子来源为订阅列表
 
     // pub po: Option<String>,
@@ -198,7 +198,7 @@ pub type ThreadReply = Thread;
 
 
 // 对于JSON的值本应是一个JSON对象但却是一个字符串，需要额外处理时所用的解析函数
-fn deserialize_json_string<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+fn deserialize_string_wrapped_json<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     T: DeserializeOwned,
     D: Deserializer<'de>,

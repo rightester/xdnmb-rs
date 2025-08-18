@@ -41,7 +41,7 @@ impl ApiClient {
         Ok(())
     }
 
-    async fn get(&self, api_path: &str, params: Option<HashMap<&str, &str>>) -> Result<json::Value, Box<dyn Error>> {
+    async fn api_get(&self, api_path: &str, params: Option<HashMap<&str, &str>>) -> Result<json::Value, Box<dyn Error>> {
         let url = format!("{}/{}", self.base_url, api_path);
         let mut request = self.client.get(url);
         let cookie;
@@ -66,7 +66,7 @@ impl ApiClient {
     // https://github.com/TransparentLC/xdcmd/wiki/%E8%87%AA%E5%B7%B1%E6%95%B4%E7%90%86%E7%9A%84-X-%E5%B2%9B%E5%8C%BF%E5%90%8D%E7%89%88-API-%E6%96%87%E6%A1%A3#%E5%85%B6%E4%BB%96%E7%9A%84%E8%AF%B4%E6%98%8E-1
     async fn get_cdn_path(&self) -> Result<CdnPathList, Box<dyn Error>> {
         let api_path = "api/getCDNPath";
-        let json = self.get(api_path, None).await?;
+        let json = self.api_get(api_path, None).await?;
         let cdn_path_list = serde_json::from_value::<CdnPathList>(json)?;
         Ok(cdn_path_list)
     }
@@ -74,7 +74,7 @@ impl ApiClient {
     // 获取板块列表
     pub async fn get_forum_list(&self) -> Result<ForumList, Box<dyn Error>> {
         let api_path = "api/getForumList";
-        let json = self.get(api_path, None).await?;
+        let json = self.api_get(api_path, None).await?;
         let forum_list = serde_json::from_value::<ForumList>(json)?;
         Ok(forum_list)
     }
@@ -82,13 +82,13 @@ impl ApiClient {
     // 获取时间线列表
     pub async fn get_timeline_list(&self) -> Result<TimelineList, Box<dyn Error>> {
         let api_path = "api/getTimelineList";
-        let json = self.get(api_path, None).await?;
+        let json = self.api_get(api_path, None).await?;
         let timeline_list = serde_json::from_value::<TimelineList>(json)?;
         Ok(timeline_list)
     }
 
     // 查看版面，fid为版面ID，page为页数（可置空）
-    pub async fn get_threads(
+    async fn get_threads(
         &self,
         api_path: &str,
         id: Option<&str>,
@@ -105,7 +105,7 @@ impl ApiClient {
             false => Some(params),
             true => None,
         };
-        let json = self.get(api_path, params).await?;
+        let json = self.api_get(api_path, params).await?;
         let thread_list = serde_json::from_value::<ThreadList>(json)?;
         Ok(thread_list)
     }
@@ -128,31 +128,31 @@ impl ApiClient {
     }
 
     #[inline]
-    pub async fn get_threads_from_timeline<TID, NUM>(
+    pub async fn get_threads_from_timeline<TLID, NUM>(
         &self,
-        tid: TID,
+        tlid: TLID,
         page: NUM,
     ) -> Result<ThreadList, Box<dyn Error>>
         where
-            TID: Display,
+            TLID: Display,
             NUM: Display,
     {
         self.get_threads(
             "api/timeline",
-            Some(tid.to_string().as_str()),
+            Some(tlid.to_string().as_str()),
             Some(page.to_string().as_str()),
         ).await
     }
 
-    // 查看串，id为串号，page为页数（可置空）
-    pub async fn get_thread_page<RID, NUM>(
+    // 查看串，id为串号，page为页数
+    pub async fn get_thread_page<TID, NUM>(
         &self,
-        rid: RID,
+        tid: TID,
         page: NUM,
         po_only: bool,
     ) -> Result<forum::Thread, Box<dyn Error>>
         where
-            RID: Display,
+            TID: Display,
             NUM: Display,
     {
         let api_path = match po_only {
@@ -160,118 +160,145 @@ impl ApiClient {
             true => "api/po",
         };
         let mut params = HashMap::new();
-        let rid = rid.to_string();
+        let rid = tid.to_string();
         params.insert("id", rid.as_str());
         let page = page.to_string();
         params.insert("page", page.as_str());
-        let json = self.get(api_path, Some(params)).await?;
+        let json = self.api_get(api_path, Some(params)).await?;
         let thread = serde_json::from_value::<forum::Thread>(json)?;
         Ok(thread)
     }
 
-    pub async fn get_reply<RID>(&self, rid: RID) -> Result<ThreadReply, Box<dyn Error>>
-        where RID: Display
+    pub async fn get_reply<TID>(&self, tid: TID) -> Result<ThreadReply, Box<dyn Error>>
+        where TID: Display
     {
         let api_path = "api/ref";
-        let rid = rid.to_string();
+        let rid = tid.to_string();
         let params: [(&'static str, &str); 1] = [("id", rid.as_str())];
-        let json = self.get(api_path, Some(params.into())).await?;
+        let json = self.api_get(api_path, Some(params.into())).await?;
         let reply = serde_json::from_value::<ThreadReply>(json)?;
         Ok(reply)
     }
 
     // 发新串
-    pub async fn post_new_thread(
+    pub async fn post_new_thread<FID>(
         &self,
-        imageurl: Option<&str>,
-        fid: &str,
+        fid: FID,
         title: Option<&str>,
+        name: Option<&str>,
+        email: Option<&str>,
         content: Option<&str>,
-        water: Option<&str>,
-        usercookie: Option<&str>,
-    ) -> Result<String, Box<dyn Error>> {
-        let url = "https://www.nmbxd1.com/Home/Forum/doPostThread.html";
-
+        img_filepath: Option<&str>,
+        img_watermark: Option<bool>,
+    ) -> Result<String, Box<dyn Error>>
+        where
+            FID: Display,
+    {
+        let action_url = "https://www.nmbxd1.com/Home/Forum/doPostThread.html";
         let mut form = multipart::Form::new()
             .text("fid", fid.to_string());
 
         if let Some(t) = title {
             form = form.text("title", t.to_string());
         }
+        if let Some(n) = name {
+            form = form.text("name", n.to_string());
+        }
+        if let Some(e) = email {
+            form = form.text("email", e.to_string());
+        }
         if let Some(c) = content {
             form = form.text("content", c.to_string());
         }
-        if let Some(w) = water {
-            form = form.text("water", w.to_string());
-        }
 
-        if let Some(img_path) = imageurl {
-            let file_content = tokio::fs::read(img_path).await?;
-            let file_name = std::path::Path::new(img_path)
+        if let Some(img_filepath) = img_filepath {
+            let file_content = tokio::fs::read(img_filepath).await?;
+            let file_name = std::path::Path::new(img_filepath)
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("file")
                 .to_string();
             let part = multipart::Part::bytes(file_content).file_name(file_name);
-            form = form.part("file", part);
+            form = form.part("image", part);
+        }
+        if let Some(true) = img_watermark {
+            form = form.text("water", "true");
         }
 
-        let mut request = self.client.post(url).multipart(form);
-        if let Some(cookie) = usercookie {
-            let cookie_header = format!("userhash={}", cookie);
+        let mut request = self.client.post(action_url).multipart(form);
+        if let Some(cookie) = self.auth_cookie.as_ref() {
+            let cookie_header = format!("userhash={}", cookie.value);
             request = request.header("cookie", cookie_header);
         }
 
         let res = request.send().await?;
         let text = res.text().await?;
-        Ok(text)
+        if text.contains("<h1>:)</h1>") {
+            Ok(String::default())
+        } else {
+            Err(text.into())
+        }
     }
 
     // 发评论
-    pub async fn post_thread_reply(
+    pub async fn post_thread_reply<TID>(
         &self,
-        name: &str,
+        tid: TID,
         title: Option<&str>,
-        usercookie: Option<&str>,
+        name: Option<&str>,
+        email: Option<&str>,
         content: Option<&str>,
-        img_url: Option<&str>,
-        img_watermark: Option<&str>,
-    ) -> Result<String, Box<dyn Error>> {
-        let url = "https://www.nmbxd1.com/Home/Forum/doReplyThread.html";
-
+        img_filepath: Option<&str>,
+        img_watermark: Option<bool>,
+    ) -> Result<String, Box<dyn Error>>
+        where
+            TID: Display,
+    {
+        let action_url = "https://www.nmbxd1.com/Home/Forum/doReplyThread.html";
         let mut form = multipart::Form::new()
-            .text("resto", name.to_string());
+            .text("resto", tid.to_string());
 
         if let Some(t) = title {
             form = form.text("title", t.to_string());
         }
+        if let Some(n) = name {
+            form = form.text("name", n.to_string());
+        }
+        if let Some(e) = email {
+            form = form.text("email", e.to_string());
+        }
+
         if let Some(c) = content {
             form = form.text("content", c.to_string());
         }
-        if let Some(w) = img_watermark {
-            form = form.text("water", w.to_string());
-        }
 
-        if let Some(img_path) = img_url {
-            let file_content = tokio::fs::read(img_path).await?;
-            let file_name = std::path::Path::new(img_path)
+        if let Some(img_filepath) = img_filepath {
+            let file_content = tokio::fs::read(img_filepath).await?;
+            let file_name = std::path::Path::new(img_filepath)
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("file")
                 .to_string();
             let part = multipart::Part::bytes(file_content).file_name(file_name);
-            form = form.part("file", part);
+            form = form.part("image", part);
+        }
+        if let Some(true) = img_watermark {
+            form = form.text("water", "true");
         }
 
-        let mut request = self.client.post(url).multipart(form);
-        if let Some(cookie) = usercookie {
-            let cookie_header = format!("userhash={}", cookie);
+        let mut request = self.client.post(action_url).multipart(form);
+        if let Some(cookie) = self.auth_cookie.as_ref() {
+            let cookie_header = format!("userhash={}", cookie.value);
             request = request.header("cookie", cookie_header);
         }
 
         let res = request.send().await?;
         let text = res.text().await?;
-        Ok(text)
+        if text.contains("<h1>:)</h1>") {
+            Ok(String::default())
+        } else {
+            Err(text.into())
+        }
     }
 
     // 查看订阅，uuid为订阅id，page为页数（可置空）
@@ -282,7 +309,7 @@ impl ApiClient {
         let feed_uuid = self.feed_uuid.as_ref().unwrap();
         let page = page.to_string();
         let params: [(&'static str, &str); 2] = [("uuid", feed_uuid.as_str()), ("page", page.as_str())];
-        let json = self.get(api_path, Some(params.into())).await?;
+        let json = self.api_get(api_path, Some(params.into())).await?;
         let thread_list = serde_json::from_value::<ThreadList>(json)?;
         Ok(thread_list)
     }
@@ -291,10 +318,10 @@ impl ApiClient {
     pub async fn add_feed(
         &self,
         uuid: &str,
-        rid: &str,
+        tid: &str,
     ) -> Result<json::Value, Box<dyn Error>> {
         let url = format!("{}/api/addFeed?uuid={}", self.base_url, uuid);
-        let params = [("rid", rid)];
+        let params = [("tid", tid)];
         let res = self.client.post(&url).form(&params).send().await?;
         let json: json::Value = res.json().await?;
         Ok(json)
@@ -304,10 +331,10 @@ impl ApiClient {
     pub async fn del_feed(
         &self,
         uuid: &str,
-        rid: &str,
+        tid: &str,
     ) -> Result<json::Value, Box<dyn Error>> {
         let url = format!("{}/api/delFeed?uuid={}", self.base_url, uuid);
-        let params = [("rid", rid)];
+        let params = [("tid", tid)];
         let res = self.client.post(&url).form(&params).send().await?;
         let json: json::Value = res.json().await?;
         Ok(json)
